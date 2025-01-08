@@ -1,0 +1,81 @@
+
+
+// Vertex shader
+const vertexShaderSource = `#version 300 es
+
+in vec3 inVertex;
+in vec3 inNormal;
+in vec3 inTangent;
+in vec2 inUV;
+
+uniform mat4 projectionMatrix;
+uniform mat4 modelMatrix;
+uniform mat4 normalMatrix;
+
+uniform vec3 lightLocation;
+
+uniform sampler2D diffuseTexture;
+uniform sampler2D normalTexture;
+uniform sampler2D specularTexture;
+
+uniform vec2 point;
+uniform vec2 scale;
+
+flat out vec3 fragColor;
+
+vec2 getUV() {
+    return ((inUV - point) * scale) + point;
+}
+
+vec3 getWorldSpaceNormal(vec2 uv)
+{
+    vec3 normal = normalize(mat3(normalMatrix) * inNormal);
+    vec3 tangent = normalize(mat3(normalMatrix) * inTangent);
+
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+
+    vec3 bitangent = cross(tangent, normal);
+    vec3 normalMap = texture(normalTexture, uv).rgb;
+    normalMap = 2.0 * normalMap - vec3(1.0, 1.0, 1.0);
+
+    mat3 TBN = mat3(tangent, bitangent, normal);
+    return normalize(TBN * normalMap);
+}
+
+void main() {
+    const float ambientFactor = 0.2;
+    vec2 uv = getUV();
+    vec3 color = texture(diffuseTexture, uv).rgb;
+    float specularFactor = pow(texture(specularTexture, uv).r, 5.0);
+
+    vec4 vertex = modelMatrix * vec4(inVertex, 1.0);
+    vertex /= vertex.w;
+
+    vec3 N = getWorldSpaceNormal(uv);
+    vec3 L = normalize(vertex.xyz - lightLocation);
+    vec3 V = normalize(-vertex.xyz);
+
+    if( dot(N, V) < 0.0) {
+        N = -N;
+    }
+
+    vec3 ambient = color * ambientFactor;
+    vec3 diffuse = vec3(max(dot(N, -L), 0.0)) * color * (1.0 - ambientFactor);
+    vec3 R = reflect(L, N);
+    vec3 specular = vec3(specularFactor) * pow(max(dot(V, R), 0.0), 16.0);
+
+    fragColor = ambient + diffuse + specular;
+    gl_Position = projectionMatrix * vertex;
+}`;
+
+
+// Fragment shader
+const fragmentShaderSource = `#version 300 es
+precision highp float;
+
+flat in vec3 fragColor;    
+out vec4 outColor;   
+
+void main() {
+    outColor = vec4(fragColor, 1.0);
+}`;
